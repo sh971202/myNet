@@ -13,10 +13,10 @@ class MyNet(nn.Module):
 
 		super(MyNet, self).__init__()
 
-		self.firstP = fullyConnected(5, 128)
-		#self.fc1 = fullyConnected(5, 16)
-		#self.fc2 = fullyConnected(16, 64)
-		#self.fc3 = fullyConnected(64, 128)
+		#self.firstP = fullyConnected(5, 128)
+		self.fc1 = fullyConnected(5, 16)
+		self.fc2 = fullyConnected(16, 64)
+		self.fc3 = fullyConnected(64, 128)
 		
 		self.res1 = ResNetBlock()
 		self.res2 = ResNetBlock()
@@ -37,10 +37,10 @@ class MyNet(nn.Module):
 
 	def forward(self, x):
 
-		out = self.firstP(x)
-		#out = self.fc1(x)
-		#out = self.fc2(out)
-		#out = self.fc3(out)
+		#out = self.firstP(x)
+		out = self.fc1(x)
+		out = self.fc2(out)
+		out = self.fc3(out)
 
 		out = self.res1(out)
 		out = self.res2(out)
@@ -48,12 +48,12 @@ class MyNet(nn.Module):
 		out = self.res4(out)
 		out = self.res5(out)
 		out = self.res6(out)
-		#out = self.res7(out)
-		#out = self.res8(out)
-		#out = self.res9(out)
-		#out = self.res10(out)
-		#out = self.res11(out)
-		#out = self.res12(out)
+		out = self.res7(out)
+		out = self.res8(out)
+		out = self.res9(out)
+		out = self.res10(out)
+		out = self.res11(out)
+		out = self.res12(out)
 
 		out = self.finalP(out)
 		out = self.relu(out)
