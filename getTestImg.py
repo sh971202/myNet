@@ -25,7 +25,3 @@ for lineIdx, line in enumerate(testList):
 	cmd = 'cp ' + args.dir + line[0] + ' ' + args.desDir
 	print (cmd)
 	os.system(cmd)
-
-
-
-

@@ -4,8 +4,35 @@ import numpy as np
 
 
 def fullyConnected(in_channel, out_channel):
-
 	return nn.Linear(in_channel, out_channel)
+def con1x3(in_channel, out_channel):
+	return nn.Conv2d(in_channel, out_channel, kernel_size = (1, 3))
+
+class SpNet(nn.Module):
+	def __init__(self):
+		super(SpNet, self).__init__()
+
+		self.fc = fullyConnected(5, 32)
+
+		# Grouping 32 -> 32x8
+
+		self.res1 = SpResNetBlock(32, 32)
+		self.res2 = SpResNetBlock(32, 64)
+		self.res3 = SpResNetBlock(64, 64)
+		self.res4 = SpResNetBlock(64, 128)
+		self.res5 = SpResNetBlock(128, 128)
+		self.res6 = SpResNetBlock(128, 256)
+		self.res7 = SpResNetBlock(256, 1)
+
+class SpResNetBlock(nn.Module):
+	def __init__(self, in_channel, out_channel):
+		super(SpResNetBlock, self).__init__()
+
+		self.conv = con1x3(in_channel, out_channel)
+		self.inorm = nn.InstanceNorm1d(out_channel)
+		self.bnorm = nn.BatchNorm1d(out_channel)
+		
+
 
 class MyNet(nn.Module):
 
@@ -13,7 +40,7 @@ class MyNet(nn.Module):
 
 		super(MyNet, self).__init__()
 
-		#self.firstP = fullyConnected(5, 128)
+		self.firstP = fullyConnected(5, 128)
 		self.fc1 = fullyConnected(5, 16)
 		self.fc2 = fullyConnected(16, 64)
 		self.fc3 = fullyConnected(64, 128)
@@ -32,15 +59,16 @@ class MyNet(nn.Module):
 		self.res12 = ResNetBlock()
 
 		self.finalP = fullyConnected(128, 1)
+		self.testConv = nn.Conv2d(1, 1, 1)
 		self.relu = nn.ReLU()
 		self.tanh = nn.Tanh()
 
 	def forward(self, x):
 
-		#out = self.firstP(x)
-		out = self.fc1(x)
-		out = self.fc2(out)
-		out = self.fc3(out)
+		out = self.firstP(x)
+		#out = self.fc1(x)
+		#out = self.fc2(out)
+		#out = self.fc3(out)
 
 		out = self.res1(out)
 		out = self.res2(out)
@@ -56,6 +84,7 @@ class MyNet(nn.Module):
 		out = self.res12(out)
 
 		out = self.finalP(out)
+		out = self.testConv(out)
 		out = self.relu(out)
 		out = self.tanh(out)
 
@@ -85,7 +114,7 @@ class ResNetBlock(nn.Module):
 
 			mean = torch.mean(x, 0)
 			
-			diff = x.clone()
+			diff = x
 			for d in diff:
 				d -= mean
 		
@@ -98,7 +127,7 @@ class ResNetBlock(nn.Module):
 			return x
 
 
-		res = x.clone()
+		res = x
 		out = self.P1(x)
 		contextNormalization(out)
 		out = self.batchNorm1(out)
