@@ -13,7 +13,7 @@ def argParse():
 
 
 args = argParse()
-if args.dir[-1] is not '/':
+if args.dir[-1] != '/':
 	args.dir += '/'
 files = [f for f in listdir(args.dir) if isfile(join(args.dir, f))]
 
