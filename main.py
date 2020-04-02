@@ -9,6 +9,7 @@ import torch.optim as optim
 import numpy as np
 
 from model import MyNet
+from model import SpNet
 from dataLoader import localizerLoader
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
@@ -29,9 +30,10 @@ def main():
 	args = argParse()
 
 	myNet = MyNet()
+	spNet = SpNet()
 
 	if args.train:
-		train(args, myNet)
+		train(args, spNet)
 	
 	#test(args, myNet)
 

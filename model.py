@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from sklearn.metrics.pairwise import euclidean_distances
 
 def fullyConnected(in_channel, out_channel):
 	return nn.Linear(in_channel, out_channel)
@@ -24,6 +25,16 @@ class SpNet(nn.Module):
 		self.res6 = SpResNetBlock(128, 256)
 		self.res7 = SpResNetBlock(256, 1)
 
+	def forward(self, x)
+
+		print (x)
+		print (x.shape())
+
+		out = self.fc(x)
+
+		return out
+
+
 class SpResNetBlock(nn.Module):
 	def __init__(self, in_channel, out_channel):
 		super(SpResNetBlock, self).__init__()
@@ -32,6 +43,16 @@ class SpResNetBlock(nn.Module):
 		self.inorm = nn.InstanceNorm1d(out_channel)
 		self.bnorm = nn.BatchNorm1d(out_channel)
 		
+	def forward(self, x):
+
+		res = x
+
+		out = self.conv(x)
+		out = self.inorm(out)
+		out = self.bnorm(out)
+
+		out += res
+		return out
 
 
 class MyNet(nn.Module):
