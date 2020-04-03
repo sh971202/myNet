@@ -9,7 +9,9 @@ def argParse():
 
 args = argParse()
 
-txt = open(arg.txt, 'r')
+txt = open(args.txt, 'r')
+outfile = open('./newTxt', 'a')
 
 for line in txt:
 	line = line.replace('/', '_')
+	print (line, file = outfile, end = '')
