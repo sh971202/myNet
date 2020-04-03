@@ -5,7 +5,7 @@ import time
 import cv2
 import math
 import numpy as np
-
+from torch.autograd import Variable
 
 #from tf.transformation import quaternion_matrix
 from scipy.spatial.transform import Rotation as R

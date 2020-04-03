@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from torch.autograd import Variable
 from sklearn.metrics.pairwise import euclidean_distances
 
 def fullyConnected(in_channel, out_channel):
@@ -25,12 +26,30 @@ class SpNet(nn.Module):
 		self.res6 = SpResNetBlock(128, 256)
 		self.res7 = SpResNetBlock(256, 1)
 
-	def forward(self, x)
+	def forward(self, x):
 
-		print (x)
-		print (x.shape())
+		#print (x)
+		#print (x.size())
 
 		out = self.fc(x)
+
+		# Grouping here
+		dis = torch.from_numpy(euclidean_distances(x, x))
+		sortIdx = torch.argsort(dis, dim = 1)
+
+		print (out.size())
+		for correIdx, corre in enumerate(out):
+			for idx in range(7):
+				corre = torch.cat((corre, out[sortIdx[correIdx][idx]]), 0)
+
+		print (out.size())
+		out = self.res1(out)
+		out = self.res2(out)
+		out = self.res3(out)
+		out = self.res4(out)
+		out = self.res5(out)
+		out = self.res6(out)
+		out = self.res7(out)
 
 		return out
 
