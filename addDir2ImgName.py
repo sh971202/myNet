@@ -1,11 +1,12 @@
-import argParse
+import argparse
 import os
 import sys
 
 from os.path import isfile, join
+from os import listdir
 
 def argParse():
-	parser = argParse.ArgumentParser()
+	parser = argparse.ArgumentParser()
 	parser.add_argument('dir', help = 'dir of jpgs')
 
 	args = parser.parse_args()
@@ -22,7 +23,6 @@ for file in files:
 		continue
 
 	# mv file dir_file
-	cmd = 'mv ' + file + ' ' +
-			args.dir + '_' + file 
+	cmd = 'mv ' + args.dir + file + ' ' + args.dir[:-1] + '_' + file 
 	print (cmd)
 	os.system(cmd)
