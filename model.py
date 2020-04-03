@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 def fullyConnected(in_channel, out_channel):
 	return nn.Linear(in_channel, out_channel)
 def con1x3(in_channel, out_channel):
-	return nn.Conv2d(in_channel, out_channel, kernel_size = (1, 3))
+	return nn.Conv2d(in_channel, out_channel, kernel_size = (3, 1))
 
 class SpNet(nn.Module):
 	def __init__(self):
@@ -18,7 +18,7 @@ class SpNet(nn.Module):
 
 		# Grouping 32 -> 32x8
 
-		self.res1 = SpResNetBlock(32, 32)
+		self.res1 = SpResNetBlock(32, 8)
 		self.res2 = SpResNetBlock(32, 64)
 		self.res3 = SpResNetBlock(64, 64)
 		self.res4 = SpResNetBlock(64, 128)
@@ -30,19 +30,29 @@ class SpNet(nn.Module):
 
 		#print (x)
 		#print (x.size())
-
 		out = self.fc(x)
+		out = torch.unsqueeze(out, 1)
+		# out = 126 x 1 x 32
 
 		# Grouping here
 		dis = torch.from_numpy(euclidean_distances(x, x))
 		sortIdx = torch.argsort(dis, dim = 1)
 
-		print (out.size())
-		for correIdx, corre in enumerate(out):
+		#print (out.size())
+		buf = out
+		out = out.expand(126, 8, 32)
+		for correIdx, corre in enumerate(buf):
 			for idx in range(7):
-				corre = torch.cat((corre, out[sortIdx[correIdx][idx]]), 0)
+				print (corre.size(), buf[sortIdx[correIdx][idx]].size())
+				corre = torch.cat((corre, buf[sortIdx[correIdx][idx]]), 0)
+				print (corre.size())
+			out[correIdx] = corre
 
 		print (out.size())
+		#out = torch.unsqueeze(out, 0)
+		out = out.permute(1, 2, 0)
+		print (out.size())
+		#print (out.size())
 		out = self.res1(out)
 		out = self.res2(out)
 		out = self.res3(out)
