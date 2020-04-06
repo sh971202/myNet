@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+import lossFunction
 
 from model import MyNet
 from model import SpNet
@@ -17,7 +18,7 @@ from torch.autograd import Variable
 from torchvision import transforms
 
 epochNum = 50
-learningRate = 1e-4
+learningRate = 1e-3
 threshold1 = 0.9
 threshold2 = 0.7
 threshold3 = 0.5
@@ -32,8 +33,12 @@ def main():
 	myNet = MyNet()
 	spNet = SpNet()
 
-	if args.train:
+	if args.train and args.sp:
+		print ('SPNet')
 		train(args, spNet)
+	elif args.train:
+		print ('MyNet')
+		train(args, myNet)
 	
 	#test(args, myNet)
 
@@ -46,14 +51,17 @@ def argParse():
 						help = 'Train Network')
 	parser.add_argument('--test', action = 'store_true',
 						help = 'Test Network')
+	parser.add_argument('--sp', action = 'store_true',
+						help = 'Whether use SPNet')
 
 	args = parser.parse_args()
 	return args
 
-
+'''
 def lossFunction(input, target):
 
 	return F.binary_cross_entropy(torch.sigmoid(input), target)
+'''
 
 def train(args, myNet):
 	global epochNum
@@ -61,6 +69,7 @@ def train(args, myNet):
 
 	resultFile = open('./result.txt', 'a')
 
+	lossF = lossFunction.Loss_classi()
 	optimizer = optim.Adam(params = myNet.parameters(), lr = learningRate)
 	dataSet = localizerLoader(dirPath)
 	dataLoader = DataLoader(dataSet, batch_size = 1, shuffle = False, num_workers = 1)
@@ -95,10 +104,11 @@ def train(args, myNet):
 			#batch = np.expand_dims(batch, axis = 0)
 
 			optimizer.zero_grad()
-			outLabel = myNet(corre)
+			outLabel, weight = myNet(corre)
 			outLabel = outLabel.squeeze()
-			
-			loss = lossFunction(outLabel, label)
+				
+			loss = lossF(outLabel, label)
+
 			loss.backward()
 			optimizer.step()
 			# cal train acc and test 
@@ -130,6 +140,7 @@ def train(args, myNet):
 		print ('acc' , threshold2 , ': ', acc2, '\n')
 		print ('acc' , threshold3 , ': ', acc3, '\n')
 		print ('acc' , threshold4 , ': ', acc4, '\n')
+		print ('loss: ', loss, '\n')
 		#print ('baseline: ', baselineAcc, '\n', file = resultFile)
 		#print ('acc: ', acc, '\n\n', file = resultFile)
 

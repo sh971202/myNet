@@ -2,114 +2,124 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from torch.nn import functional as F
 from torch.autograd import Variable
 from sklearn.metrics.pairwise import euclidean_distances
 
 def fullyConnected(in_channel, out_channel):
 	return nn.Linear(in_channel, out_channel)
 def con1x3(in_channel, out_channel):
-	return nn.Conv1d(in_channel, out_channel, kernel_size = 3)
+	return nn.Conv2d(in_channel, out_channel, kernel_size = (1, 3))
+def con2x3(in_channel, out_channel):
+	return nn.Conv2d(in_channel, out_channel, kernel_size = (2, 3))
 
 class SpNet(nn.Module):
 	def __init__(self):
 		super(SpNet, self).__init__()
 
-		self.fc = fullyConnected(5, 32)
+		self.conv1 = nn.Sequential(
+			nn.Conv2d(1, 32, (1, 5)),
+			nn.BatchNorm2d(32),
+			nn.ReLU(),
+			)
+		self.conv2 = nn.Sequential(
+			nn.Conv2d(256, 256, (1, 1)),
+			nn.InstanceNorm2d(256),
+			nn.BatchNorm2d(256),
+			nn.ReLU(),
+			)
+		self.finalConv = nn.Sequential(
+			nn.Conv2d(256, 1, (1, 1)),
+			)
+		self.layer = self.makeLayers(SpResNetBlock)
 
-		# Grouping 32 -> 32x8
+	def makeLayers(self, SpResNetBlock):
+		layers = []
+		layers.append(SpResNetBlock(32, 32, pre = False))
+		layers.append(SpResNetBlock(32, 32, pre = False))
+		layers.append(SpResNetBlock(32, 64, stride = 2, pre = True))
+		layers.append(SpResNetBlock(64, 64, pre = False))
+		layers.append(SpResNetBlock(64, 128, stride = 2, pre = True))
+		layers.append(SpResNetBlock(128, 128, pre = False))
+		layers.append(SpResNetBlock(128, 256, stride = 2, pre = True))
+		layers.append(SpResNetBlock(256, 256, pre = False))
 
-		self.res1 = SpResNetBlock(8, 32)
-		self.res2 = SpResNetBlock(32, 32)
-		self.res3 = SpResNetBlock(32, 64)
-		self.res4 = SpResNetBlock(64, 64)
-		self.res5 = SpResNetBlock(64, 128)
-		self.res6 = SpResNetBlock(128, 128)
-		self.res7 = SpResNetBlock(128, 256)
-		self.res8 = FinalResNetBlock(256, 256)
-
-		self.conv1 = nn.Conv1d(256, 1, kernel_size = 1)
-		self.conv2 = nn.Conv1d(1, 1, kernel_size = 1)
+		return nn.Sequential(*layers)
 
 	def forward(self, x):
-
-		#print (x)
-		#print (x.size())
-		out = self.fc(x)
-		out = torch.unsqueeze(out, 1)
-		# out = 126 x 1 x 32
-
-		# Grouping here
 		dis = torch.from_numpy(euclidean_distances(x, x))
-		sortIdx = torch.argsort(dis, dim = 1)
+		x = torch.unsqueeze(x, 1)
+		x = torch.unsqueeze(x, 1)
+		#print (x.size())
+		out = self.conv1(x)
+		# grouping
 
-		
+		#dis = torch.from_numpy(euclidean_distances(x, x))
+		sortIdx = torch.argsort(dis, dim = 1)
+	
 		buf = out
-		out = out.expand(x.size()[0], 8, 32)
+		out = out.expand(x.size()[0], 32, 1, 8)
 		for correIdx, corre in enumerate(buf):
 			for idx in range(7):
 				#print (corre.size(), buf[sortIdx[correIdx][idx]].size())
-				corre = torch.cat((corre, buf[sortIdx[correIdx][idx]]), 0)
+				corre = torch.cat((corre, buf[sortIdx[correIdx][idx]]), 2)
 				#print (corre.size())
 			out[correIdx] = corre
 
-		out = self.res1(out)
-		out = self.res2(out)
-		out = self.res3(out)
-		out = self.res4(out)
-		out = self.res5(out)
-		out = self.res6(out)
-		out = self.res7(out)
-		out = self.res8(out)
-		
-		out = self.conv1(out)
+		#print (out.size())
+		out = self.layer(out)
+		#print (out.size())
 		out = self.conv2(out)
+		#print (out.size())
+		out = self.finalConv(out)
+		#print (out.size())
+		out = out.view(out.size(0), -1)
+		#print (out.size())
+		w = torch.tanh(out)
+		w = F.relu(w)
 
-		return out
+		return out, w
 
 
 class SpResNetBlock(nn.Module):
-	def __init__(self, in_channel, out_channel):
+	def __init__(self, in_channel, out_channel, stride = 1, pre = False):
 		super(SpResNetBlock, self).__init__()
+		self.pre = pre
+		self.right = nn.Sequential(
+			nn.Conv2d(in_channel, out_channel, (1, 3), stride = (1, stride), padding = (0, 1)),
+			nn.BatchNorm2d(out_channel)
+			)
+		self.left = nn.Sequential(
+			nn.Conv2d(in_channel, out_channel, (1, 3), stride = (1, stride), padding = (0, 1)),
+			nn.InstanceNorm2d(out_channel),
+			nn.BatchNorm2d(out_channel),
+			nn.ReLU(inplace = True),
+			nn.Conv2d(out_channel, out_channel, (1, 3), stride = 1, padding = (0, 1)),
+			nn.InstanceNorm2d(out_channel),
+			nn.BatchNorm2d(out_channel)
+			)
 
-		self.conv = con1x3(in_channel, out_channel)
-		self.inorm = nn.InstanceNorm1d(out_channel)
-		self.bnorm = nn.BatchNorm1d(out_channel)
-		self.relu = nn.ReLU()
-
-		self.conv2 = con1x3(out_channel, out_channel)
-		self.inorm2 = nn.InstanceNorm1d(out_channel)
-		self.bnorm2 = nn.BatchNorm1d(out_channel)
-		self.relu2 = nn.ReLU()
-		
 	def forward(self, x):
+		identity = self.right(x) if self.pre is True else x
+		out = self.left(x)
+		out = out + identity
+		#print (out.size())
+		return F.relu(out)
 
-		res = x
-		out = self.conv(x)
-		out = self.inorm(out)
-		out = self.bnorm(out)
-		out = self.relu(out)
-
-		out = self.conv2(out)
-		out = self.inorm2(out)
-		out = self.bnorm2(out)
-		out = self.relu2(out)
-
-		#out += res
-		return out
 
 class FinalResNetBlock(nn.Module):
 	def __init__(self, in_channel, out_channel):
 		super(FinalResNetBlock, self).__init__()
 
 		self.conv = con1x3(in_channel, out_channel)
-		self.inorm = nn.InstanceNorm1d(out_channel)
-		self.bnorm = nn.BatchNorm1d(out_channel)
+		self.inorm = nn.InstanceNorm2d(out_channel)
+		self.bnorm = nn.BatchNorm2d(out_channel)
 		self.relu = nn.ReLU()
 
 		#self.conv2 = con1x3(out_channel, out_channel)
-		self.conv2 = nn.Conv1d(out_channel, out_channel, kernel_size = 2)
-		self.inorm2 = nn.InstanceNorm1d(out_channel)
-		self.bnorm2 = nn.BatchNorm1d(out_channel)
+		self.conv2 = nn.Conv2d(out_channel, out_channel, kernel_size = (1, 2))
+		self.inorm2 = nn.InstanceNorm2d(out_channel)
+		self.bnorm2 = nn.BatchNorm2d(out_channel)
 		self.relu2 = nn.ReLU()
 		
 	def forward(self, x):
