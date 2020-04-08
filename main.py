@@ -18,7 +18,7 @@ from torch.autograd import Variable
 from torchvision import transforms
 
 epochNum = 50
-learningRate = 1e-3
+learningRate = 1
 threshold1 = 0.9
 threshold2 = 0.7
 threshold3 = 0.5
@@ -57,11 +57,16 @@ def argParse():
 	args = parser.parse_args()
 	return args
 
-'''
-def lossFunction(input, target):
+
+def lossFunctionOri(input, target):
 
 	return F.binary_cross_entropy(torch.sigmoid(input), target)
-'''
+
+
+def weights_init(m):
+    if isinstance(m, torch.nn.Conv2d):
+        torch.nn.init.xavier_normal_(m.weight.data)
+        torch.nn.init.constant_(m.bias.data, 0)
 
 def train(args, myNet):
 	global epochNum
@@ -69,7 +74,8 @@ def train(args, myNet):
 
 	resultFile = open('./result.txt', 'a')
 
-	lossF = lossFunction.Loss_classi()
+	#lossF = lossFunction.Loss_classi()
+	lossF = lossFunctionOri()
 	optimizer = optim.Adam(params = myNet.parameters(), lr = learningRate)
 	dataSet = localizerLoader(dirPath)
 	dataLoader = DataLoader(dataSet, batch_size = 1, shuffle = False, num_workers = 1)
@@ -88,6 +94,8 @@ def train(args, myNet):
 		correct4 = 0
 		baselineCorrect = 0
 		total = 0
+
+		myNet.apply(weights_init)
 		myNet.train()
 
 		for batchIdx, batch in enumerate(dataLoader):
@@ -104,7 +112,11 @@ def train(args, myNet):
 			#batch = np.expand_dims(batch, axis = 0)
 
 			optimizer.zero_grad()
-			outLabel, weight = myNet(corre)
+			if args.train and args.sp:
+				outLabel, weight = myNet(corre)
+				#weight, outLabel = myNet(corre)
+			elif args.train:
+				outLabel = myNet(corre)
 			outLabel = outLabel.squeeze()
 				
 			loss = lossF(outLabel, label)

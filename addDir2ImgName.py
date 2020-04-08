@@ -19,7 +19,7 @@ files = [f for f in listdir(args.dir) if isfile(join(args.dir, f))]
 
 for file in files:
 
-	if file[-4:] != '.jpg':
+	if file[-4:] != '.jpg' and file[-4:] != '.png':
 		continue
 
 	# mv file dir_file

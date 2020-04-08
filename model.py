@@ -24,7 +24,7 @@ class SpNet(nn.Module):
 			)
 		self.conv2 = nn.Sequential(
 			nn.Conv2d(256, 256, (1, 1)),
-			nn.InstanceNorm2d(256),
+			#nn.InstanceNorm2d(256),
 			nn.BatchNorm2d(256),
 			nn.ReLU(),
 			)
@@ -47,33 +47,40 @@ class SpNet(nn.Module):
 		return nn.Sequential(*layers)
 
 	def forward(self, x):
+		#print (x)	
 		dis = torch.from_numpy(euclidean_distances(x, x))
 		x = torch.unsqueeze(x, 1)
 		x = torch.unsqueeze(x, 1)
 		#print (x.size())
 		out = self.conv1(x)
+		#print (out.size())
 		# grouping
 
 		#dis = torch.from_numpy(euclidean_distances(x, x))
 		sortIdx = torch.argsort(dis, dim = 1)
-	
+		
 		buf = out
 		out = out.expand(x.size()[0], 32, 1, 8)
 		for correIdx, corre in enumerate(buf):
 			for idx in range(7):
 				#print (corre.size(), buf[sortIdx[correIdx][idx]].size())
 				corre = torch.cat((corre, buf[sortIdx[correIdx][idx]]), 2)
+				#print (buf[sortIdx[correIdx][idx]])
 				#print (corre.size())
 			out[correIdx] = corre
 
 		#print (out.size())
 		out = self.layer(out)
+		
 		#print (out.size())
 		out = self.conv2(out)
+		#print (out)
 		#print (out.size())
 		out = self.finalConv(out)
 		#print (out.size())
 		out = out.view(out.size(0), -1)
+		#print (out.size())
+		#print (out)
 		#print (out.size())
 		w = torch.tanh(out)
 		w = F.relu(w)
@@ -91,18 +98,36 @@ class SpResNetBlock(nn.Module):
 			)
 		self.left = nn.Sequential(
 			nn.Conv2d(in_channel, out_channel, (1, 3), stride = (1, stride), padding = (0, 1)),
-			nn.InstanceNorm2d(out_channel),
+			#nn.InstanceNorm2d(out_channel),
 			nn.BatchNorm2d(out_channel),
 			nn.ReLU(inplace = True),
 			nn.Conv2d(out_channel, out_channel, (1, 3), stride = 1, padding = (0, 1)),
-			nn.InstanceNorm2d(out_channel),
+			#nn.InstanceNorm2d(out_channel),
 			nn.BatchNorm2d(out_channel)
 			)
 
 	def forward(self, x):
+
+		def contextNormalization(x):
+			#  x : N x 128
+			#  mean : 128
+			mean = torch.mean(x, 0)
+			
+			diff = x
+			for d in diff:
+				d -= mean
+		
+			#  va : 128
+			va = torch.var(diff, 0)
+			va = torch.sqrt( torch.div(va, x.size()[0] ) )
+
+			x = torch.div(diff, va)
+			return x
+
 		identity = self.right(x) if self.pre is True else x
 		out = self.left(x)
 		out = out + identity
+		contextNormalization(out)
 		#print (out.size())
 		return F.relu(out)
 
@@ -112,13 +137,13 @@ class FinalResNetBlock(nn.Module):
 		super(FinalResNetBlock, self).__init__()
 
 		self.conv = con1x3(in_channel, out_channel)
-		self.inorm = nn.InstanceNorm2d(out_channel)
+		#self.inorm = nn.InstanceNorm2d(out_channel)
 		self.bnorm = nn.BatchNorm2d(out_channel)
 		self.relu = nn.ReLU()
 
 		#self.conv2 = con1x3(out_channel, out_channel)
 		self.conv2 = nn.Conv2d(out_channel, out_channel, kernel_size = (1, 2))
-		self.inorm2 = nn.InstanceNorm2d(out_channel)
+		#self.inorm2 = nn.InstanceNorm2d(out_channel)
 		self.bnorm2 = nn.BatchNorm2d(out_channel)
 		self.relu2 = nn.ReLU()
 		
@@ -126,12 +151,12 @@ class FinalResNetBlock(nn.Module):
 
 		res = x
 		out = self.conv(x)
-		out = self.inorm(out)
+		#out = self.inorm(out)
 		out = self.bnorm(out)
 		out = self.relu(out)
 
 		out = self.conv2(out)
-		out = self.inorm2(out)
+		#out = self.inorm2(out)
 		out = self.bnorm2(out)
 		out = self.relu2(out)
 
@@ -189,7 +214,7 @@ class MyNet(nn.Module):
 		out = self.res12(out)
 
 		out = self.finalP(out)
-		out = self.testConv(out)
+		#out = self.testConv(out)
 		out = self.relu(out)
 		out = self.tanh(out)
 
