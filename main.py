@@ -11,6 +11,7 @@ import lossFunction
 
 from model import MyNet
 from model import SpNet
+from model import NGNet
 from dataLoader import localizerLoader
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
@@ -18,13 +19,17 @@ from torch.autograd import Variable
 from torchvision import transforms
 
 epochNum = 50
-learningRate = 1
+learningRate = 1e-4
 threshold1 = 0.9
 threshold2 = 0.7
 threshold3 = 0.5
 threshold4 = 0.3
+threshold5 = 0.1
+threshold6 = 1e-4
+threshold7 = 1e-5
 #dirPath = 'DataSet/minusNTU'
-dirPath = 'DataSet/minus23'
+#dirPath = 'DataSet/minus23'
+dirPath = 'DataSet/Cambridge/ShopFacade'
 
 def main():
 
@@ -32,10 +37,11 @@ def main():
 
 	myNet = MyNet()
 	spNet = SpNet()
+	ngNet = NGNet()
 
 	if args.train and args.sp:
 		print ('SPNet')
-		train(args, spNet)
+		train(args, ngNet)
 	elif args.train:
 		print ('MyNet')
 		train(args, myNet)
@@ -74,8 +80,8 @@ def train(args, myNet):
 
 	resultFile = open('./result.txt', 'a')
 
-	#lossF = lossFunction.Loss_classi()
-	lossF = lossFunctionOri()
+	lossF = lossFunction.Loss_classi()
+	#lossF = lossFunctionOri()
 	optimizer = optim.Adam(params = myNet.parameters(), lr = learningRate)
 	dataSet = localizerLoader(dirPath)
 	dataLoader = DataLoader(dataSet, batch_size = 1, shuffle = False, num_workers = 1)
@@ -92,6 +98,9 @@ def train(args, myNet):
 		correct2 = 0
 		correct3 = 0
 		correct4 = 0
+		correct5 = 0
+		correct6 = 0
+		correct7 = 0
 		baselineCorrect = 0
 		total = 0
 
@@ -136,6 +145,12 @@ def train(args, myNet):
 				correct3 += 1 if result < threshold3 and gt == 0 else 0
 				correct4 += 1 if result > threshold4 and gt == 1 else 0
 				correct4 += 1 if result < threshold4 and gt == 0 else 0
+				correct5 += 1 if result > threshold5 and gt == 1 else 0
+				correct5 += 1 if result < threshold5 and gt == 0 else 0
+				correct6 += 1 if result > threshold6 and gt == 1 else 0
+				correct6 += 1 if result < threshold6 and gt == 0 else 0
+				correct7 += 1 if result > threshold7 and gt == 1 else 0
+				correct7 += 1 if result < threshold7 and gt == 0 else 0
 
 				baselineCorrect += 1 if baseline == gt else 0
 			
@@ -145,6 +160,9 @@ def train(args, myNet):
 		acc2 = correct2 / total
 		acc3 = correct3 / total
 		acc4 = correct4 / total
+		acc5 = correct5 / total
+		acc6 = correct6 / total
+		acc7 = correct7 / total
 		baselineAcc = baselineCorrect / total
 		
 		print ('\nbaseline: ', baselineAcc, '\n')
@@ -152,6 +170,9 @@ def train(args, myNet):
 		print ('acc' , threshold2 , ': ', acc2, '\n')
 		print ('acc' , threshold3 , ': ', acc3, '\n')
 		print ('acc' , threshold4 , ': ', acc4, '\n')
+		print ('acc' , threshold5 , ': ', acc5, '\n')
+		print ('acc' , threshold6 , ': ', acc6, '\n')
+		print ('acc' , threshold7 , ': ', acc7, '\n')
 		print ('loss: ', loss, '\n')
 		#print ('baseline: ', baselineAcc, '\n', file = resultFile)
 		#print ('acc: ', acc, '\n\n', file = resultFile)

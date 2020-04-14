@@ -241,6 +241,7 @@ def main():
             # read imageName, camera pose
             imagePathName = line[0].split('/')
             imageName = imagePathName[-1][:-4]
+            #print (imageName)
             
             line = np.array(line)[1:].astype(np.float32)
             focalLength = line[0]
@@ -311,13 +312,16 @@ def main():
 
         imagePathName = line[0].split('/')
         imageName = imagePathName[-1][:-4]
-        imageName = str(int(imageName) + 288)
+        #print (imageName)
+        #imageName = str(int(imageName) + 288)
 
         line = np.array(line[1:]).astype(np.float32)
 
         cord2D = line[:2]
         cord3D = line[2:]
 
+        #labelBySearch = groundTruthList[imageIDDic[imageName]].getLabelBySearch(cord2D, 
+        #       cord3D)
         labelByReprojection = groundTruthList[imageIDDic[imageName]].getLabelByReprojection(cord2D, 
                 cord3D)
 

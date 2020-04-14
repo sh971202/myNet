@@ -22,6 +22,6 @@ for lineIdx, line in enumerate(testList):
 		continue
 
 	# cp testimg desdir
-	cmd = 'cp ' + args.dir + line[0] + ' ' + args.desDir
+	cmd = 'mv ' + args.dir + line[0] + ' ' + args.desDir
 	print (cmd)
 	os.system(cmd)

@@ -20,6 +20,7 @@ class localizerLoader(Dataset):
 		self.ransacLabel = np.empty((count, 1))
 		self.dic = {}
 		self.nextDic = {}
+		self.imageIDs = []
 
 		imageID = ''
 		npID = 0
@@ -31,11 +32,14 @@ class localizerLoader(Dataset):
 			self.label[npID] = 1 if (corre[-2] == 'True') else 0
 			self.ransacLabel[npID] = 1 if (corre[-1] == 'True') else 0
 			if imageID != corre[0]: # new image
+				self.imageIDs.append(imageID)
 				self.nextDic.update({imageID: npID})
 				imageID = corre[0]
 				self.dic.update({imageID: npID})
 			npID += 1
 
+		self.imageIDs.append(imageID)
+		self.imageIDs.remove('')
 		del self.nextDic['']
 		# Last image to the end of file
 		self.nextDic.update({imageID: count})
@@ -66,11 +70,12 @@ class localizerLoader(Dataset):
 
 	def __getitem__(self, index):
 
-		index = str(index + 289)
-		# next is not corrct next
-		corre = self.data[ self.dic[index] : self.nextDic[index] ]
-		label = self.label[ self.dic[index] : self.nextDic[index] ]
-		ransacLabel = self.ransacLabel[ self.dic[index] : self.nextDic[index] ]
+		#index = str(index + 289)
+		#print (self.imageIDs)
+		imageID = self.imageIDs[index]
+		corre = self.data[ self.dic[imageID] : self.nextDic[imageID] ]
+		label = self.label[ self.dic[imageID] : self.nextDic[imageID] ]
+		ransacLabel = self.ransacLabel[ self.dic[imageID] : self.nextDic[imageID] ]
 
 		return corre, label, ransacLabel
 

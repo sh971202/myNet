@@ -13,6 +13,101 @@ def con1x3(in_channel, out_channel):
 def con2x3(in_channel, out_channel):
 	return nn.Conv2d(in_channel, out_channel, kernel_size = (2, 3))
 
+class NGNet(nn.Module):
+	def __init__(self):
+		super(NGNet, self).__init__()
+
+		self.conv1 = nn.Sequential(
+			nn.Conv2d(1, 32, (1, 5)),
+			nn.BatchNorm2d(32),
+			nn.ReLU()
+			)
+		self.conv2 = nn.Sequential(
+			nn.Conv2d(256, 256, (1, 1)),
+			nn.BatchNorm2d(256),
+			nn.ReLU()
+			)
+		self.finalConv = nn.Sequential(
+			nn.Conv2d(256, 1, (1, 1)),
+			)
+		self.layer = self.makeLayers(NGNetResNetBlock)
+
+
+	def makeLayers(self, NGNetResNetBlock):
+
+		layers = []
+		layers.append(NGNetResNetBlock(32, 32))
+		layers.append(NGNetResNetBlock(32, 32))
+		layers.append(NGNetResNetBlock(32, 64, pre = True))
+		layers.append(NGNetResNetBlock(64, 64))
+		layers.append(NGNetResNetBlock(64, 128, pre = True))
+		layers.append(NGNetResNetBlock(128, 128))
+		layers.append(NGNetResNetBlock(128, 256, pre = True))
+		layers.append(NGNetResNetBlock(256, 256))
+
+		return nn.Sequential(*layers)
+
+
+	def forward(self, x):
+		
+		x = torch.unsqueeze(x, 1)
+		x = torch.unsqueeze(x, 1)
+		out = self.conv1(x)
+		#print ('After conv1, ', x.size())
+		out = self.layer(out)
+		#print ('layer F')
+		out = self.conv2(out)
+		out = self.finalConv(out)
+		out = out.view(out.size(0), -1)
+		w = torch.tanh(out)
+		w = F.relu(w)
+
+		return out ,w
+
+
+class NGNetResNetBlock(nn.Module):
+	def __init__(self, in_channel, out_channel, stride = 1, pre = False):
+		super(NGNetResNetBlock, self).__init__()
+		self.pre = pre
+		self.right = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel, (1, 1), stride = (1, stride)),
+            nn.BatchNorm2d(out_channel)
+        	)
+
+		self.left = nn.Sequential(
+			nn.Conv2d(in_channel, out_channel, (1, 1), stride = (1, stride)),
+			nn.BatchNorm2d(out_channel),
+			nn.ReLU(inplace = True),
+			nn.Conv2d(out_channel, out_channel, (1, 1), stride = 1),
+			nn.BatchNorm2d(out_channel),
+			)
+
+	def forward(self, x):
+
+		def contextNormalization(x):
+			#  x : N x 128
+			#  mean : 128
+			mean = torch.mean(x, 0)
+			
+			diff = x
+			for d in diff:
+				d -= mean
+		
+			#  va : 128
+			va = torch.var(diff, 0)
+			va = torch.sqrt( torch.div(va, x.size()[0] ) )
+
+			x = torch.div(diff, va)
+			return x
+
+		res = self.right(x) if self.pre is True else x
+		out = self.left(x)
+		out = out + res
+		contextNormalization(out)
+		return F.relu(out)
+
+
+
 class SpNet(nn.Module):
 	def __init__(self):
 		super(SpNet, self).__init__()
@@ -69,19 +164,10 @@ class SpNet(nn.Module):
 				#print (corre.size())
 			out[correIdx] = corre
 
-		#print (out.size())
 		out = self.layer(out)
-		
-		#print (out.size())
 		out = self.conv2(out)
-		#print (out)
-		#print (out.size())
 		out = self.finalConv(out)
-		#print (out.size())
 		out = out.view(out.size(0), -1)
-		#print (out.size())
-		#print (out)
-		#print (out.size())
 		w = torch.tanh(out)
 		w = F.relu(w)
 
@@ -128,7 +214,6 @@ class SpResNetBlock(nn.Module):
 		out = self.left(x)
 		out = out + identity
 		contextNormalization(out)
-		#print (out.size())
 		return F.relu(out)
 
 
