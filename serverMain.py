@@ -15,11 +15,11 @@ from model import NGNet
 from dataLoader import localizerLoader
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
-
+from sklearn.metrics.pairwise import euclidean_distances
 from torchvision import transforms
 
 epochNum = 50
-learningRate = 1e-4
+learningRate = 1e-6
 threshold1 = 0.9
 threshold2 = 0.7
 threshold3 = 0.5
@@ -29,8 +29,7 @@ threshold6 = 1e-4
 threshold7 = 1e-5
 #dirPath = 'DataSet/minusNTU'
 #dirPath = 'DataSet/minus23'
-#dirPath = 'DataSet/Cambridge/ShopFacade'
-dirPath = 'DataSet/Cambridge/OldHospital'
+dirPath = 'DataSet/Cambridge/ShopFacade'
 
 def main():
 
@@ -89,10 +88,12 @@ def train(args, myNet):
 
 	# cuda & dataparallel?
 
+	myNet.cuda()
+
 	for epoch in range(epochNum):
 
 		print ('--------------------------------------------')
-		print (epoch + 1, 'th epoch, pytorch lossFn, 1e-4, grouping, OldHospital')
+		print (epoch + 1, 'th epoch, pytorch lossFn,', learningRate)
 		print ('--------------------------------------------')
 
 		correct1 = 0
@@ -115,20 +116,24 @@ def train(args, myNet):
 			corre = corre.squeeze()
 			label = label.squeeze()
 			ransacLabel = ransacLabel.squeeze()
-			corre = Variable(corre.float())
-			label = Variable(label.float())
+			dis = torch.from_numpy(euclidean_distances(corre[:, :2], corre[:, :2]))
+			#print (corre.size(), corre[:, :2].size(), dis.size())
+			corre = Variable(corre.float()).cuda()
+			label = Variable(label.float()).cuda()
+			#print (corre.size(), label.size())
 			ransacLabel = Variable(ransacLabel.float())
+			dis = Variable(dis).cuda()
 
 			#batch = np.expand_dims(batch, axis = 0)
 
 			optimizer.zero_grad()
 			if args.train and args.sp:
-				outLabel, weight = myNet(corre)
+				outLabel, weight = myNet(corre, dis)
 				#weight, outLabel = myNet(corre)
 			elif args.train:
 				outLabel = myNet(corre)
 			outLabel = outLabel.squeeze()
-				
+			#print (outLabel.size())
 			#loss = lossF(outLabel, label)
 			loss = lossFunctionOri(outLabel, label)
 
@@ -137,6 +142,9 @@ def train(args, myNet):
 			# cal train acc and test 
 
 			myNet.eval()
+
+			outLabel = outLabel.data.cpu()
+			label = label.data.cpu()
 			
 			for result, baseline, gt in zip(outLabel, ransacLabel, label):	
 				correct1 += 1 if result > threshold1 and gt == 1 else 0
