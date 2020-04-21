@@ -218,7 +218,8 @@ def main():
 
     f = open(args.dataPath + '/data.txt', 'r')
     gt = open(args.dataPath + '/groundtruth.nvm', 'r')
-    outfile = open(args.dataPath + '/train.txt', 'a')
+    trainfile = open(args.dataPath + '/train.txt', 'a')
+    testfile = open(args.dataPath + '/test.txt', 'a')
 
     groundTruthList = [] 
 
@@ -329,13 +330,18 @@ def main():
         correCount += 1
 
         #if label is not 'Error':
-        print (imageName,
+        if lineCount % 5 == 0:
+            print (imageName,
             cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],
-            labelByReprojection, ransacLabel, file = outfile)
+            labelByReprojection, ransacLabel, file = testfile)
+        else:
+            print (imageName,
+            cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],
+            labelByReprojection, ransacLabel, file = trainfile)
 
 
 
-    outfile.close()
+    trainfile.close()
 
     print ('By Search Correct: %d, Wrong: %d, Miss: %d' % (correct, wrong, miss))
     print ('By Reprojection Correct: %d, Wrong: %d, Miss: %d' % (correctR, wrongR, missR))

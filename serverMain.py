@@ -9,9 +9,9 @@ import torch.optim as optim
 import numpy as np
 import lossFunction
 
-from model import MyNet
-from model import SpNet
-from model import NGNet
+from serverModel import MyNet
+from serverModel import SpNet
+from serverModel import NGNet
 from dataLoader import localizerLoader
 from torch.utils.data import DataLoader
 from torch.autograd import Variable

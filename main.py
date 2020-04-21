@@ -29,8 +29,8 @@ threshold6 = 1e-4
 threshold7 = 1e-5
 #dirPath = 'DataSet/minusNTU'
 #dirPath = 'DataSet/minus23'
-#dirPath = 'DataSet/Cambridge/ShopFacade'
-dirPath = 'DataSet/Cambridge/OldHospital'
+dirPath = 'DataSet/Cambridge/ShopFacade'
+#dirPath = 'DataSet/Cambridge/OldHospital'
 
 def main():
 
@@ -92,7 +92,7 @@ def train(args, myNet):
 	for epoch in range(epochNum):
 
 		print ('--------------------------------------------')
-		print (epoch + 1, 'th epoch, pytorch lossFn, 1e-4, grouping, OldHospital')
+		print (epoch + 1, 'th epoch, pytorch lossFn, 1e-4, grouping, shop')
 		print ('--------------------------------------------')
 
 		correct1 = 0
@@ -139,14 +139,6 @@ def train(args, myNet):
 			myNet.eval()
 			
 			for result, baseline, gt in zip(outLabel, ransacLabel, label):	
-				correct1 += 1 if result > threshold1 and gt == 1 else 0
-				correct1 += 1 if result < threshold1 and gt == 0 else 0
-				correct2 += 1 if result > threshold2 and gt == 1 else 0
-				correct2 += 1 if result < threshold2 and gt == 0 else 0
-				correct3 += 1 if result > threshold3 and gt == 1 else 0
-				correct3 += 1 if result < threshold3 and gt == 0 else 0
-				correct4 += 1 if result > threshold4 and gt == 1 else 0
-				correct4 += 1 if result < threshold4 and gt == 0 else 0
 				correct5 += 1 if result > threshold5 and gt == 1 else 0
 				correct5 += 1 if result < threshold5 and gt == 0 else 0
 				correct6 += 1 if result > threshold6 and gt == 1 else 0
@@ -158,20 +150,12 @@ def train(args, myNet):
 			
 			total += len(label)
 
-		acc1 = correct1 / total
-		acc2 = correct2 / total
-		acc3 = correct3 / total
-		acc4 = correct4 / total
 		acc5 = correct5 / total
 		acc6 = correct6 / total
 		acc7 = correct7 / total
 		baselineAcc = baselineCorrect / total
 		
 		print ('\nbaseline: ', baselineAcc, '\n')
-		print ('acc' , threshold1 , ': ', acc1, '\n')
-		print ('acc' , threshold2 , ': ', acc2, '\n')
-		print ('acc' , threshold3 , ': ', acc3, '\n')
-		print ('acc' , threshold4 , ': ', acc4, '\n')
 		print ('acc' , threshold5 , ': ', acc5, '\n')
 		print ('acc' , threshold6 , ': ', acc6, '\n')
 		print ('acc' , threshold7 , ': ', acc7, '\n')
@@ -179,9 +163,51 @@ def train(args, myNet):
 		#print ('baseline: ', baselineAcc, '\n', file = resultFile)
 		#print ('acc: ', acc, '\n\n', file = resultFile)
 
+		testAcc, baseAcc = test(args, myNet)
+
+		print ('testBaseAcc: ', baseAcc)
+		print ('testAcc: ', testAcc)
+
+
 def test(args, myNet):
 
-	return
+	correct = 0
+	baselineCorrect = 0
+	total = 0
+
+	dataSet = localizerLoader(dirPath)
+	dataLoader = DataLoader(dataSet, batch_size = 1, shuffle = False, num_workers = 1)
+
+	myNet.eval()
+
+	for batchIdx, batch in enumerate(dataLoader):
+
+		(corre, label, ransacLabel) = batch
+		corre = corre.squeeze()
+		label = label.squeeze()
+		ransacLabel = ransacLabel.squeeze()
+		corre = Variable(corre.float())
+		label = Variable(label.float())
+		ransacLabel = Variable(ransacLabel.float())
+
+		if args.train and args.sp:
+			outLabel, weight = myNet(corre)
+			#weight, outLabel = myNet(corre)
+		elif args.train:
+			outLabel = myNet(corre)
+			outLabel = outLabel.squeeze()
+
+		for result, baseline, gt in zip(outLabel, ransacLabel, label):	
+			correct += 1 if result > threshold6 and gt == 1 else 0
+			correct += 1 if result < threshold6 and gt == 0 else 0
+			baselineCorrect += 1 if baseline == gt else 0
+
+		total += len(label)
+
+	acc = correct / total
+	baselineAcc = baselineCorrect / total
+
+	return acc, baselineAcc
 
 if __name__ == '__main__':
 	main()
