@@ -211,12 +211,6 @@ def main():
 
     global decimals, correct, wrong, miss
 
-    minx, maxx = 0, 0
-    miny, maxy = 0, 0
-    minz, maxz = 0, 0
-
-    firstData = True
-
     args = argParse()
 
     f = open(args.dataPath + '/data.txt', 'r')
@@ -282,21 +276,6 @@ def main():
             cord3D = line[:3]
             rgb = line[3:5]
             num2D = int(line[6])
-
-            if firstData:
-                minx, maxx = cord3D[0], cord3D[0]
-                miny, maxy = cord3D[1], cord3D[1]
-                minz, maxz = cord3D[2], cord3D[2]
-                firstData = False
-
-            minx = cord3D[0] if cord3D[0] < minx else minx
-            maxx = cord3D[0] if cord3D[0] > maxx else maxx
-            miny = cord3D[1] if cord3D[1] < miny else miny
-            maxy = cord3D[1] if cord3D[1] > maxy else maxy
-            minz = cord3D[2] if cord3D[2] < minz else minz
-            maxz = cord3D[2] if cord3D[2] > maxz else maxz
-
-
 
             for i in range(num2D):
                 imageID = int(line[7 + i*4]) # each i has imageID, kpID, x, y
@@ -365,51 +344,44 @@ def main():
         correCount += 1
 
         #if label is not 'Error':
-        '''
-        cord3D[0] = (cord3D[0] - minx) / (maxx - minx)
-        cord3D[1] = (cord3D[1] - miny) / (maxy - miny)
-        cord3D[2] = (cord3D[2] - minz) / (maxz - minz)
-        '''
+        
         if imgCount % 5 == 4:
             # test file
-            
             if labelByReprojection == True:
-                #if testCount % 4 == 0:
-                print (imageName+'_0',\
+                if testCount % 4  == 1:
+                    print (imageName+'_1',\
                     cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
                     labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
                     transformVector[1:-1], file = testfile)
-                testCorrect += 1
+                    testCorrect += 1
                 testCount += 1
             else:
-                print (imageName+'_0',\
+                print (imageName+'_1',\
                 cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
                 labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
                 transformVector[1:-1], file = testfile)
                 testWrong += 1
-            
         else:
             # train file
             #print (imageName,\
             #cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
             #labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
-            #transformVector[1:-1], file = correbuffile) 
-           ''' 
+            #transformVector[1:-1], file = correbuffile)
             if labelByReprojection == True:
-                if trainCount % 4 == 0:
-                    print (imageName+'_0',\
+                if trainCount % 4 == 1:
+                    print (imageName+'_1',\
                     cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
                     labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
                     transformVector[1:-1], file = trainfile)
                     trainCorrect += 1
                 trainCount += 1
             else:
-                print (imageName+'_0',\
+                print (imageName+'_1',\
                 cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
                 labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
                 transformVector[1:-1], file = trainfile)
                 trainWrong += 1
-            '''
+
     '''
     correbuffile.close()
     correbuffile = open(args.dataPath + '/correbuf.txt', 'r')

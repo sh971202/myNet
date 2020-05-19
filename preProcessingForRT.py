@@ -51,7 +51,7 @@ class GroundTruthCorre():
         self.distortionCoeffs = np.array([])
         
         self.intrinsicMatrix = np.array([[focalLength, 0.0, 0.0],
-                                        [0.0, focalLength, 0.0],
+                                        [0.0, -focalLength, 0.0],
                                         [0.0, 0.0, 1.0]])
     
         RT = np.concatenate((self.rotationMatrix, np.expand_dims(self.transformVector, axis = 0).T), axis = 1)
@@ -158,14 +158,12 @@ class GroundTruthCorre():
         r2 = r2 / (self.focalLength ** 2)
         undistorted2D = np.multiply(np.array([1 + r2, 1 + r2]), cord2D)
 
-        if (myPoint[0] > 0 ) != (undistorted2D[0] > 0):
-            myPoint[0] = -myPoint[0]
-            xChange = True
-        if (myPoint[1] > 0 ) != (undistorted2D[1] > 0):
-            myPoint[1] = -myPoint[1]
-            yChange = True
+        #myPoint[0] -= 720.0
+        #myPoint[1] = -myPoint[1] + 540.0
 
         reprojectionError = math.sqrt(((undistorted2D - myPoint)**2).sum())
+        #print ('gtPts: ', undistorted2D)
+        #print ('myPts: ', myPoint, '\n-------------------------------------\n')
         #reprojectionError = abs(undistorted2D[1] - myPoint[1])
 
         #print (undistorted2D, myPoint, reprojectionError, xChange, yChange)
@@ -222,8 +220,8 @@ def main():
     f = open(args.dataPath + '/data.txt', 'r')
     gt = open(args.dataPath + '/groundtruth.nvm', 'r')
     correbuffile = open(args.dataPath + '/correbuf.txt', 'a')
-    trainfile = open(args.dataPath + '/train.txt', 'a')
-    testfile = open(args.dataPath + '/test.txt', 'a')
+    trainfile = open(args.dataPath + '/train_RT.txt', 'a')
+    testfile = open(args.dataPath + '/test_RT.txt', 'a')
 
     groundTruthList = [] 
 
@@ -372,7 +370,6 @@ def main():
         '''
         if imgCount % 5 == 4:
             # test file
-            
             if labelByReprojection == True:
                 #if testCount % 4 == 0:
                 print (imageName+'_0',\
@@ -387,14 +384,13 @@ def main():
                 labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
                 transformVector[1:-1], file = testfile)
                 testWrong += 1
-            
         else:
             # train file
             #print (imageName,\
             #cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
             #labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
-            #transformVector[1:-1], file = correbuffile) 
-           ''' 
+            #transformVector[1:-1], file = correbuffile)
+            
             if labelByReprojection == True:
                 if trainCount % 4 == 0:
                     print (imageName+'_0',\
@@ -409,7 +405,7 @@ def main():
                 labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
                 transformVector[1:-1], file = trainfile)
                 trainWrong += 1
-            '''
+            
     '''
     correbuffile.close()
     correbuffile = open(args.dataPath + '/correbuf.txt', 'r')

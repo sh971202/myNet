@@ -103,7 +103,7 @@ class NGNetResNetBlock(nn.Module):
 		res = self.right(x) if self.pre is True else x
 		out = self.left(x)
 		out = out + res
-		contextNormalization(out)
+		#contextNormalization(out)
 		return F.relu(out)
 
 
