@@ -142,7 +142,7 @@ class SpNet(nn.Module):
                 return nn.Sequential(*layers)
 
         def forward(self, x):
-                #print (x)      
+                #print (x)
                 c = x.detach().numpy()
                 dis = torch.from_numpy(euclidean_distances(c, c))
                 x = torch.unsqueeze(x, 1)

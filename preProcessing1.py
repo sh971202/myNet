@@ -213,11 +213,11 @@ def main():
 
     args = argParse()
 
-    f = open(args.dataPath + '/data.txt', 'r')
+    f = open(args.dataPath + '/data_dis.txt', 'r')
     gt = open(args.dataPath + '/groundtruth.nvm', 'r')
     correbuffile = open(args.dataPath + '/correbuf.txt', 'a')
-    trainfile = open(args.dataPath + '/train.txt', 'a')
-    testfile = open(args.dataPath + '/test.txt', 'a')
+    trainfile = open(args.dataPath + '/train_dis.txt', 'a')
+    testfile = open(args.dataPath + '/test_dis.txt', 'a')
 
     groundTruthList = [] 
 
@@ -301,9 +301,9 @@ def main():
     trainWrong = 0
     testWrong = 0
     imgCount = 0
+    correCount = 0
     imageName = ''
     for lineCount, line in enumerate(f.readlines()):
-        correCount = 0
         line = line.split()
         
         if len(line) < 2:
@@ -326,7 +326,8 @@ def main():
         line = np.array(line[1:]).astype(np.float32)
 
         cord2D = line[:2]
-        cord3D = line[2:]
+        cord3D = line[2:5]
+        distance = line[5]
 
         #labelBySearch = groundTruthList[imageIDDic[imageName]].getLabelBySearch(cord2D, 
         #       cord3D)
@@ -349,17 +350,17 @@ def main():
             # test file
             if labelByReprojection == True:
                 if testCount % 4  == 1:
-                    print (imageName+'_1',\
-                    cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
-                    labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
-                    transformVector[1:-1], file = testfile)
+                    #print (imageName+'_1',\
+                    #cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
+                    #labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
+                    #transformVector[1:-1], distance, file = testfile)
                     testCorrect += 1
                 testCount += 1
             else:
-                print (imageName+'_1',\
-                cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
-                labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
-                transformVector[1:-1], file = testfile)
+                #print (imageName+'_1',\
+                #cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
+                #labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
+                #transformVector[1:-1], distance, file = testfile)
                 testWrong += 1
         else:
             # train file
@@ -372,14 +373,14 @@ def main():
                     print (imageName+'_1',\
                     cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
                     labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
-                    transformVector[1:-1], file = trainfile)
+                    transformVector[1:-1], distance, file = trainfile)
                     trainCorrect += 1
                 trainCount += 1
             else:
                 print (imageName+'_1',\
                 cord2D[0], cord2D[1], cord3D[0], cord3D[1], cord3D[2],\
                 labelByReprojection, ransacLabel, focalLength, quaternion[1:-1],\
-                transformVector[1:-1], file = trainfile)
+                transformVector[1:-1], distance, file = trainfile)
                 trainWrong += 1
 
     '''

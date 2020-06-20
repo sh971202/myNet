@@ -19,7 +19,9 @@ class localizerLoader(Dataset):
                 self.data = np.empty((count, 5))
                 self.label = np.empty((count, 1))
                 self.ransacLabel = np.empty((count, 1))
-                self.distance = np.empty((count, 1))
+                #self.distance = np.empty((count, 1))
+                self.des1 = np.empty((count, 128))
+                self.des2 = np.empty((count, 128))
                 self.dic = {}
                 self.nextDic = {}
                 self.imageIDs = []
@@ -38,7 +40,9 @@ class localizerLoader(Dataset):
                         self.data[npID] = corre[1:6]
                         self.label[npID] = 1 if (corre[6] == 'True') else 0
                         self.ransacLabel[npID] = 1 if (corre[7] == 'True') else 0
-                        self.distance[npID] = corre[16]
+                        #self.distance[npID] = corre[16]
+                        self.des1[npID] = corre[16:144]
+                        self.des2[npID] = corre[144:272]
                         if imageID != corre[0]: # new image
                                 self.imageIDs.append(imageID)
                                 self.focalLength.append(float(corre[8]))
@@ -91,8 +95,10 @@ class localizerLoader(Dataset):
                 corre = self.data[ self.dic[imageID] : self.nextDic[imageID] ]
                 label = self.label[ self.dic[imageID] : self.nextDic[imageID] ]
                 ransacLabel = self.ransacLabel[ self.dic[imageID] : self.nextDic[imageID] ]
-                distance = self.distance[ self.dic[imageID] :\
-                        self.nextDic[imageID] ]
+                des1 = self.des1[ self.dic[imageID] : self.nextDic[imageID] ]
+                des2 = self.des2[ self.dic[imageID] : self.nextDic[imageID] ]
+                #distance = self.distance[ self.dic[imageID] :\
+                #        self.nextDic[imageID] ]
                 f = self.focalLength[index]
                 r = self.quaternion[index]
                 t = self.tvec[index]
@@ -110,8 +116,8 @@ class localizerLoader(Dataset):
                 retCorre = np.array(retCorre)
                 retLabel = np.array(retLabel)
                 retRan = np.array(retRan)
-                #print ('dataloader corre size: ', corre.shape)
-                return corre, label, ransacLabel, f, r, t, distance
+
+                return corre, label, ransacLabel, f, r, t, des1, des2
                 #return retCorre, retLabel, retRan, f, r, t, distance
 
 def main():

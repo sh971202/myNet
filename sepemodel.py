@@ -112,8 +112,14 @@ class SpNet(nn.Module):
         def __init__(self):
                 super(SpNet, self).__init__()
 
+                self.featureConv1 = nn.Sequential(\
+                        nn.Conv2d(1, 1, (1, 128)),\
+                        )
+                self.featureConv2 = nn.Sequential(
+                        nn.Conv2d(1, 1, (1, 128)),
+                        )
                 self.conv1 = nn.Sequential(
-                        nn.Conv2d(1, 32, (1, 5)),
+                        nn.Conv2d(1, 32, (1, 7)),
                         nn.BatchNorm2d(32),
                         nn.ReLU(),
                         )
@@ -141,10 +147,28 @@ class SpNet(nn.Module):
 
                 return nn.Sequential(*layers)
 
-        def forward(self, x):
+        def forward(self, x, des1, des2):
                 #print (x)      
-                c = x.detach().numpy()
-                dis = torch.from_numpy(euclidean_distances(c, c))
+
+                dis = torch.from_numpy(euclidean_distances(x, x))
+                des1 = torch.unsqueeze(des1, 1)
+                des1 = torch.unsqueeze(des1, 1)
+                des2 = torch.unsqueeze(des2, 1)
+                des2 = torch.unsqueeze(des2, 1)
+                #des = torch.cat((des1, des2), 3)
+                #print (des.size())
+                #des = self.featureConv(des)
+                f1 = self.featureConv1(des1)
+                f2 = self.featureConv2(des2)
+                #print (des.size())
+                f1 = torch.squeeze(f1)
+                f1 = torch.unsqueeze(f1, 1)
+                f2 = torch.squeeze(f2)
+                f2 = torch.unsqueeze(f2, 1)
+                #print (x.size())
+                #dis = torch.from_numpy(euclidean_distances(x, x)
+                x = torch.cat((x, f1), 1) 
+                x = torch.cat((x, f2), 1)
                 x = torch.unsqueeze(x, 1)
                 x = torch.unsqueeze(x, 1)
                 #print (x.size())
@@ -152,7 +176,6 @@ class SpNet(nn.Module):
                 #print (out.size())
                 # grouping
 
-                #dis = torch.from_numpy(euclidean_distances(x, x))
                 sortIdx = torch.argsort(dis, dim = 1)
                 
                 buf = out

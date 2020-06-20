@@ -10,10 +10,10 @@ import numpy as np
 import lossFunction
 import cv2
 
-from model import MyNet
-from model import SpNet
-from model import NGNet
-from dataLoader import localizerLoader
+from sepemodel import MyNet
+from sepemodel import SpNet
+from sepemodel import NGNet
+from dataLoader128 import localizerLoader
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from math import *
@@ -35,12 +35,13 @@ threshold7 = 0
 #dirPath = 'DataSet/Cambridge/OldHospital/train.txt'
 #testPath = 'DataSet/Cambridge/OldHospital/test.txt'
 #testPath = 'DataSet/Cambridge/ShopFacade/test.txt'
-dirPath = 'DataSet/Cambridge/OldHospital/train_dis.txt'
-testPath = 'DataSet/Cambridge/OldHospital/test_dis.txt'
+dirPath = 'DataSet/Cambridge/OldHospital/128train.txt'
+testPath = 'DataSet/Cambridge/OldHospital/128test.txt'
 
 classLoss = 0
+localLoss = 0
 
-pthName = 'SP_class_Nodistance_NoCN_'
+pthName = 'SP_class&local_Nodistance_NoCN_128sepe_'
 
 np.set_printoptions(suppress = True)
 
@@ -84,20 +85,23 @@ def argParse():
         return args
 
 
-def lossFunctionOri(input, target, epoch):
+def lossFunctionOri(input, target, rvec, rvecgt, tvec, tvecgt, epoch):
 
         global classLoss, localLoss, epochNum
 
         classficationLoss = F.binary_cross_entropy(torch.sigmoid(input),\
                 target)  
-        loss = classficationLoss
+        loLoss = lossFunction.localizationLoss()
+        localizationLoss = loLoss(rvec, rvecgt, tvec, tvecgt)
+        #loss = classficationLoss
         #loss = classficationLoss + localizationLoss
         #loss = localizationLoss
 
-        #loss = (classficationLoss * (epochNum - epoch) + localizationLoss *
-        #epoch * 0.1) / epochNum 
+        loss = (classficationLoss * epochNum) + ((localizationLoss *
+        epoch * 0.1) / epochNum) 
 
         classLoss += classficationLoss
+        localLoss += localizationLoss
         
         return loss
 
@@ -214,6 +218,7 @@ def train(args, myNet):
                 global localLoss, classLoss
 
                 classLoss = 0
+                localLoss = 0
                 batchNum = 0
 
                 print\
@@ -241,28 +246,36 @@ def train(args, myNet):
 
                         #print (batchIdx, 'th Batch')
                         (corre, label, ransacLabel, focalLength, quaterniongt,
-                                tvecgt, distance) = batch
+                                tvecgt, des1, des2) = batch
                         #tvecgt = np.reshape(tvecgt, (3, 1))
 
                         corre = corre.squeeze()
                         label = label.squeeze()
                         ransacLabel = ransacLabel.squeeze()
-                        distance = distance.squeeze()
-                        corre = Variable(corre.float(), requires_grad = True)
+                        #distance = distance.squeeze()
+                        des1 = des1.squeeze()
+                        des2 = des2.squeeze()
+                        corre = Variable(corre.float())
                         label = Variable(label.float())
-                        ransacLabel = Variable(ransacLabel.float(),\
-                                requires_grad = False)
-                        distance = Variable(distance.float(), requires_grad = True)
+                        ransacLabel = Variable(ransacLabel.float())
+                        #distance = Variable(distance.float())
+                        des1 = Variable(des1.float())
+                        des2 = Variable(des2.float())
                         quaterniongt = Variable(quaterniongt.float(),\
-                                requires_grad = False)
-                        tvecgt = Variable(tvecgt.float(), requires_grad = False)
-                        distance = torch.unsqueeze(distance, 1)
+                                requires_grad = True)
+                        tvecgt = Variable(tvecgt.float(), requires_grad = True)
+                        #distance = torch.unsqueeze(distance, 1)
+                        #des1 = torch.unsqueeze(des1, 1)
+                        #des2 = torch.unsqueeze(des2, 1)
 
                         # distance here
                         #corre = torch.cat((corre, distance), 1)
 
+                        #corre = torch.cat((corre, des1), 1)
+                        #corre = torch.cat((corre, des2), 1)
+
                         if args.train and args.sp:
-                                outLabel, weight = myNet(corre)
+                                outLabel, weight = myNet(corre, des1, des2)
                                 #weight, outLabel = myNet(corre)
                         elif args.train:
                                 outLabel = myNet(corre)
@@ -273,8 +286,31 @@ def train(args, myNet):
                         corre = np.expand_dims(corre, axis = 2)
                         #print (corre[:,2:,:].shape, corre[:,:2,:].shape)
                         #print (corre.shape)
+                        intrinsicMatrix = np.array([[focalLength, 0, 0],\
+                                                    [0, -focalLength, 0],\
+                                                    [0, 0 ,1]])
+                        distCoeffs = np.zeros((5, 1))
+                        objPts = np.ascontiguousarray(corre[:, 2:5, :])
+                        imgPts = np.ascontiguousarray(corre[:, :2, :])
                  
-                        loss = lossFunctionOri(outLabel, label, epoch + 1)
+                        if len(corre) < 4:
+                            continue
+
+                        ret, rvec, tvec = cv2.solvePnP(objPts, imgPts,\
+                                intrinsicMatrix, distCoeffs)
+                        
+                        rvecgt = matrix2Vector(quaternion2Matrix(quaterniongt[0]))
+                        rvecgt = Variable(torch.from_numpy(rvecgt).float())
+                        rvec = (rvec.transpose()) * 180 / pi
+                        rvec[0, 1] *= -1
+                        rvec = Variable(torch.from_numpy(rvec).float(),\
+                                requires_grad = True)
+                        tvec = Variable(torch.from_numpy(tvec).float(),\
+                                requires_grad = True)
+                        tvec = torch.reshape(tvec, (1, 3))
+
+                        loss = lossFunctionOri(outLabel, label, rvec, rvecgt,\
+                                tvec, tvecgt,  epoch + 1)
                         
                         optimizer.zero_grad()
                         loss.backward()
@@ -316,7 +352,6 @@ def train(args, myNet):
                 acc7 = correct7 / total
                 baselineAcc = baselineCorrect / total
                 inlierP = inlier / total
-
                 print ('\nbaseline: ', baselineAcc, '\n')
                 print ('acc' , threshold1 , ': ', acc1, '\n')
                 print ('acc' , threshold2 , ': ', acc2, '\n')
@@ -330,8 +365,7 @@ def train(args, myNet):
                 #print ('baseline: ', baselineAcc, '\n', file = resultFile)
                 #print ('acc: ', acc, '\n\n', file = resultFile)
 
-                testAcc1, testAcc2, testAcc3, testAcc4, testAcc5, testAcc6,\
-                testAcc7, baseAcc, inlierP = test(args, myNet)
+                testAcc1, testAcc2, testAcc3, testAcc4, testAcc5, testAcc6, testAcc7, baseAcc, inlierP = test(args, myNet)
 
                 print ('testBaseAcc: ', baseAcc)
                 print ('testAcc1: ', testAcc1)
@@ -341,13 +375,13 @@ def train(args, myNet):
                 print ('testAcc5: ', testAcc5)
                 print ('testAcc6: ', testAcc6)
                 print ('testAcc7: ', testAcc7)
-                print ('inlier:', inlierP)
-
+                print ('inlier: ', inlierP)
                 torch.save(myNet.state_dict(), './pth/' + pthName +\
                         str(epochIdx) + 'epoch.pth')
                 
                 print ('BatchNum: ', batchNum)
                 print ('classLoss: ', classLoss / batchNum)
+                print ('localLoss: ', localLoss / batchNum)
 
 
 def test(args, myNet):
@@ -371,23 +405,32 @@ def test(args, myNet):
         for batchIdx, batch in enumerate(dataLoader):
 
                 (corre, label, ransacLabel, focalLength, quaternion, tvec,\
-                        distance) = batch
+                        des1, des2) = batch
                 corre = corre.squeeze()
                 label = label.squeeze()
                 ransacLabel = ransacLabel.squeeze()
-                distance = distance.squeeze()
+                #distance = distance.squeeze()
+                des1 = des1.squeeze()
+                des2 = des2.squeeze()
                 corre = Variable(corre.float(), requires_grad = False)
                 label = Variable(label.float(), requires_grad = False)
                 ransacLabel = Variable(ransacLabel.float(), requires_grad = False)
-                distance = Variable(distance.float(), requires_grad = False)
+                #distance = Variable(distance.float())
+                des1 = Variable(des1.float(), requires_grad = False)
+                des2 = Variable(des2.float(), requires_grad = False)
 
-                distance = torch.unsqueeze(distance, 1)
+                #distance = torch.unsqueeze(distance, 1)
+                #des1 = torch.unsqueeze(des1, 1)
+                #des2 = torch.unsqueeze(des2, 1)
                 
                 # distance here
                 #corre = torch.cat((corre, distance), 1)
 
+                #corre = torch.cat((corre, des1), 1)
+                #corre = torch.cat((corre, des2), 1)
+
                 if args.train and args.sp:
-                        outLabel, weight = myNet(corre)
+                        outLabel, weight = myNet(corre, des1, des2)
                         #weight, outLabel = myNet(corre)
                 elif args.train:
                         outLabel = myNet(corre)
@@ -423,7 +466,6 @@ def test(args, myNet):
                     correct7 += 1 if result < threshold7 and gt == 0 else 0
                     baselineCorrect += 1 if baseline == gt else 0 
                     inlier += 1 if result > threshold7 else 0
-
                 total += len(label)
         acc1 = correct1 / total
         acc2 = correct2 / total
@@ -435,7 +477,6 @@ def test(args, myNet):
         #acc = correct / total
         baselineAcc = baselineCorrect / total
         inlierP = inlier / total
-
         return acc1, acc2, acc3, acc4, acc5, acc6, acc7, baselineAcc, inlierP
 
 if __name__ == '__main__':

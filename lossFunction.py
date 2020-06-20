@@ -71,21 +71,26 @@ class localizationLoss(nn.Module):
         #theta = (torch.acos(qDot) * 180 / pi)[0]
         #print('theta(rotation loss):', theta)
         rl2norm = torch.sqrt(torch.sum(rvec ** 2))
-        rvec = torch.div(rvec, rl2norm)
+        #rvec = torch.div(rvec, rl2norm)
         rl2normgt = torch.sqrt(torch.sum(rvecgt ** 2))
-        rvecgt = torch.div(rvecgt, rl2normgt)
+        #rvecgt = torch.div(rvecgt, rl2normgt)
         tl2norm = torch.sqrt(torch.sum(tvec ** 2))
-        tvec = torch.div(tvec, tl2norm)
+        #tvec = torch.div(tvec, tl2norm)
         tl2normgt = torch.sqrt(torch.sum(tvecgt ** 2))
-        tvecgt = torch.div(tvecgt, tl2normgt)
+        #tvecgt = torch.div(tvecgt, tl2normgt)
         rloss = torch.dist(rvec, rvecgt, 2)
         tloss = torch.dist(tvec, tvecgt, 2)
-        #print ('tvecLoss:', l2norm)
-        #print ('rLoss: ', rl2norm)
+        #print ('tLoss:', tloss)
+        #print ('rLoss: ', rloss)
+        #print ('r: ', rvec)
+        #print ('rgt: ', rvecgt)
+        #print ('t: ', tvec)
+        #print ('tgt: ',tvecgt)
+        #print ('')
         #print ('tLoss: ', tl2norm, '\n------------------------------\n')
-        lossValue = (rloss + tloss).float()
+        lossValue = (rloss * 100.0  + tloss).float()
         #print (theta, l2norm, lossValue)
 
-        return lossValue
+        return lossValue, rloss, tloss
 
 

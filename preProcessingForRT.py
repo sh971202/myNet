@@ -34,7 +34,7 @@ class GroundTruthCorre():
         #self.rotationMatrix = np.transpose(rotation.as_matrix())
         #self.rotationMatrix = inv(rotation.as_matrix())
         #self.rotationMatrix = rotation.as_matrix()
-        #self.rotationVector = rotation.as_rotvec()
+        #self.rotdtionVector = rotation.as_rotvec()
 
         self.quaternion = quaternion
         self.rotationMatrix = rotationMatrix

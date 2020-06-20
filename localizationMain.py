@@ -10,9 +10,9 @@ import numpy as np
 import lossFunction
 import cv2
 
-from model import MyNet
-from model import SpNet
-from model import NGNet
+from localizationModel import MyNet
+from localizationModel import SpNet
+from localizationModel import NGNet
 from dataLoader import localizerLoader
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
@@ -39,8 +39,9 @@ dirPath = 'DataSet/Cambridge/OldHospital/train_dis.txt'
 testPath = 'DataSet/Cambridge/OldHospital/test_dis.txt'
 
 classLoss = 0
+localLoss = 0
 
-pthName = 'SP_class_Nodistance_NoCN_'
+pthName = 'SP_local_NoCN_'
 
 np.set_printoptions(suppress = True)
 
@@ -84,20 +85,26 @@ def argParse():
         return args
 
 
-def lossFunctionOri(input, target, epoch):
+def lossFunctionOri(input, target, quaternion, quaterniongt, tvec, tvecgt,\
+        epoch):
 
         global classLoss, localLoss, epochNum
 
         classficationLoss = F.binary_cross_entropy(torch.sigmoid(input),\
                 target)  
-        loss = classficationLoss
+        loLoss = lossFunction.localizationLoss()
+        localizationLoss = loLoss(quaternion, quaterniongt, tvec, tvecgt)
+        #loss = classficationLoss
         #loss = classficationLoss + localizationLoss
         #loss = localizationLoss
 
-        #loss = (classficationLoss * (epochNum - epoch) + localizationLoss *
+        #loss = (classficationLoss * (epochNum - epoch) + localizationLoss *\
         #epoch * 0.1) / epochNum 
-
+ 
+        loss = (classficationLoss * epochNum) + ((localizationLoss *\
+        epoch * 0.01) / epochNum)
         classLoss += classficationLoss
+        localLoss += localizationLoss
         
         return loss
 
@@ -213,6 +220,7 @@ def train(args, myNet):
 
                 global localLoss, classLoss
 
+                locallLoss = 0
                 classLoss = 0
                 batchNum = 0
 
@@ -249,18 +257,22 @@ def train(args, myNet):
                         ransacLabel = ransacLabel.squeeze()
                         distance = distance.squeeze()
                         corre = Variable(corre.float(), requires_grad = True)
-                        label = Variable(label.float())
+                        label = Variable(label.float(), requires_grad = False)
                         ransacLabel = Variable(ransacLabel.float(),\
                                 requires_grad = False)
                         distance = Variable(distance.float(), requires_grad = True)
                         quaterniongt = Variable(quaterniongt.float(),\
-                                requires_grad = False)
-                        tvecgt = Variable(tvecgt.float(), requires_grad = False)
+                                requires_grad = True)
+                        tvecgt = Variable(tvecgt.float(), requires_grad = True)
+                        #distance = distance.expand(corre.size()[0], 1)
                         distance = torch.unsqueeze(distance, 1)
 
                         # distance here
                         #corre = torch.cat((corre, distance), 1)
 
+
+                        #batch = np.expand_dims(batch, axis = 0)
+                        #print (corre.size())
                         if args.train and args.sp:
                                 outLabel, weight = myNet(corre)
                                 #weight, outLabel = myNet(corre)
@@ -268,20 +280,89 @@ def train(args, myNet):
                                 outLabel = myNet(corre)
                         outLabel = outLabel.squeeze()
                         correMask = (outLabel > threshold7)
+                        ransacMask = (label > 0)
+                        #print (correMask.size(), corre.size())
+                        #ransacCorre = corre[ransacMask]
                         corre = corre[correMask]
+                        #print (corre.size())
+                        intrinsicMatrix = np.array([[focalLength, 0.0, 0.0],\
+                                                    [0.0, -focalLength, 0.0],\
+                                                    [0.0, 0.0, 1.0]])
+                        #ret, intrinsicMatrix, dist, r, t =\
+                        #cv2.calibrateCamera(corre[:,2:], corre[:,:2], (1440,\
+                        #    1080), intrinsicMatrix, None)
+                        distCoeffs = np.zeros((5, 1))
                         corre = corre.data.numpy()
                         corre = np.expand_dims(corre, axis = 2)
+                        #ransacCorre = np.expand_dims(ransacCorre, axis = 2)
                         #print (corre[:,2:,:].shape, corre[:,:2,:].shape)
+                        objPts = np.ascontiguousarray(corre[:, 2:5, :])
+                        imgPts = np.ascontiguousarray(corre[:, :2, :])
+                        #ransacobjPts = np.ascontiguousarray(ransacCorre[:, 2:5, :])
+                        #ransacimgPts = np.ascontiguousarray(ransacCorre[:, :2, :])
                         #print (corre.shape)
-                 
-                        loss = lossFunctionOri(outLabel, label, epoch + 1)
+                        if len(corre) < 4:
+                            #print ('too less pts')
+                            #print ('gt ptnb: ', len(ransacCorre))
+                            continue
+                        ret, rvec, tvec = cv2.solvePnP(objPts, imgPts, intrinsicMatrix, distCoeffs)
+                        #if len(ransacCorre) < 4:
+                        #    continue
+                        #rret, rrvec, rtvec = cv2.solvePnP(ransacobjPts,\
+                        #        ransacimgPts, intrinsicMatrix, distCoeffs)
+                        #print ('oriRV: ', np.reshape(rrvec, (1, 3)))
+                        #print ('aftRV: ', matrix2Vector(vector2Matrix(rrvec)),'\n')
+                        #rotationMatrix = cv2.Rodrigues(rvec)[0]
+                        rotationMatrix = vector2Matrix(rvec)
+                        #rrotationMatrix = vector2Matrix(rrvec)
+                        newRvec = matrix2Vector(rotationMatrix)
+                        #rnewRvec = matrix2Vector(rrotationMatrix)
+                        quaternion =\
+                        Variable(torch.from_numpy(matrix2Quaternion(rotationMatrix)).float(),\
+                                requires_grad = True)
+                        #rquaternion =\
+                        #Variable(torch.from_numpy(matrix2Quaternion(rrotationMatrix)).float(),\
+                        #        requires_grad = True)
+
+                        quaternion = torch.reshape(quaternion, (1, 4))
+                        #tvec = np.linalg.inv(rotationMatrix).dot(tvec)
+                        #rtvec = -np.linalg.inv(rrotationMatrix).dot(rtvec)
+                        #rtvec = rrotationMatrix.dot(rtvec)
+                        #print (tvec.size)
+                        #tvec = tvec.reshape(tvec, (1, 3))
+                        #rtvec = np.reshape(rtvec, (1, 3))
+                        gtRotationMatrix = quaternion2Matrix(quaterniongt[0])
+                        rvecgt = matrix2Vector(gtRotationMatrix)
+                        rvecgt = Variable(torch.from_numpy(rvecgt).float())
+                        rvec = rvec.transpose()
+                        rvec = rvec * 180 / pi
+                        rvec[0, 1] *= -1
+                        rvec = Variable(torch.from_numpy(rvec).float(),\
+                                requires_grad = True)
+                        #print ('rV: ', rrvec)
+                        #print ('netrV:', rvec)
+                        #print ('gtRV:', gtRotationVector, '\n')
+                        #print ('M: ', rrotationMatrix)
+                        #print ('invM', np.linalg.inv(rrotationMatrix))
+                        #print ('gtM:', gtRotationMatrix, '\n')
+                        #print ('r: ',rquaternion)
+                        #print ('gtr: ', quaterniongt, '\n')
+                        #print ('t: ', rtvec)
+                        #print ('gtt: ', tvecgt, '\n')
+                        #print ('-------------------------------')
+                        #tvec = rotationMatrix.dot(tvec)
+                        tvec = Variable(torch.from_numpy(tvec).float(),
+                                requires_grad = True)
+                        tvec = torch.reshape(tvec, (1, 3))
+                        #loss = lossF(outLabel, label)
+                        loss = lossFunctionOri(outLabel, label, rvec,\
+                                rvecgt, tvec, tvecgt, epoch + 1)
                         
                         optimizer.zero_grad()
                         loss.backward()
                         optimizer.step()
                         # cal train acc and test
 
-                        #myNet.eval()
                         
                         for result, baseline, gt in zip(outLabel, ransacLabel, label):  
                                 correct1 += 1 if result > threshold1 and gt == 1 else 0
@@ -298,9 +379,9 @@ def train(args, myNet):
                                 correct6 += 1 if result < threshold6 and gt == 0 else 0
                                 correct7 += 1 if result > threshold7 and gt == 1 else 0
                                 correct7 += 1 if result < threshold7 and gt == 0 else 0
-
-                                baselineCorrect += 1 if baseline == gt else 0
                                 inlier += 1 if result > threshold7 else 0
+                                baselineCorrect += 1 if baseline == gt else 0
+
                         batchNum += 1
 
                         total += len(label)
@@ -316,7 +397,7 @@ def train(args, myNet):
                 acc7 = correct7 / total
                 baselineAcc = baselineCorrect / total
                 inlierP = inlier / total
-
+                
                 print ('\nbaseline: ', baselineAcc, '\n')
                 print ('acc' , threshold1 , ': ', acc1, '\n')
                 print ('acc' , threshold2 , ': ', acc2, '\n')
@@ -341,13 +422,14 @@ def train(args, myNet):
                 print ('testAcc5: ', testAcc5)
                 print ('testAcc6: ', testAcc6)
                 print ('testAcc7: ', testAcc7)
-                print ('inlier:', inlierP)
+                print ('inlier: ', inlierP)
 
                 torch.save(myNet.state_dict(), './pth/' + pthName +\
                         str(epochIdx) + 'epoch.pth')
                 
                 print ('BatchNum: ', batchNum)
                 print ('classLoss: ', classLoss / batchNum)
+                print ('localLoss: ', localLoss / batchNum)
 
 
 def test(args, myNet):
@@ -434,9 +516,8 @@ def test(args, myNet):
         acc7 = correct7 / total
         #acc = correct / total
         baselineAcc = baselineCorrect / total
-        inlierP = inlier / total
 
-        return acc1, acc2, acc3, acc4, acc5, acc6, acc7, baselineAcc, inlierP
+        return acc1, acc2, acc3, acc4, acc5, acc6, acc7, baselineAcc, inlier / total
 
 if __name__ == '__main__':
         main()

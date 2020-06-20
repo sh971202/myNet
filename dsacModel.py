@@ -13,6 +13,28 @@ def con1x3(in_channel, out_channel):
 def con2x3(in_channel, out_channel):
         return nn.Conv2d(in_channel, out_channel, kernel_size = (2, 3))
 
+def pairwiseDistances(x, y = None):
+    '''
+    Input : x is a Nxd Matrix
+            y is a Mxd Matrix
+    Output : a NxM matrix where dist[i, j] is the square norm between
+            x[i,:] and y[j:], if y is not given use 'y = x'
+    '''
+
+    xNorm = (x**2).sum(1).view(-1, 1)
+    if y is not None:
+        yt = torch.transpose(y, 0, 1)
+        yNorm = (y**2).sum(1).view(1, -1)
+    else:
+        yt = torch.transpose(x, 0, 1)
+        yNorm = (x**2).sum(1).view(1, -1)
+
+    dist = xNorm + yNorm - 2.0 * torch.mm(x, yt)
+    return torch.clamp(dist, 0.0, np.inf)
+
+
+
+
 class NGNet(nn.Module):
         def __init__(self):
                 super(NGNet, self).__init__()
@@ -113,7 +135,7 @@ class SpNet(nn.Module):
                 super(SpNet, self).__init__()
 
                 self.conv1 = nn.Sequential(
-                        nn.Conv2d(1, 32, (1, 5)),
+                        nn.Conv2d(1, 32, (1, 6)),
                         nn.BatchNorm2d(32),
                         nn.ReLU(),
                         )
@@ -142,9 +164,11 @@ class SpNet(nn.Module):
                 return nn.Sequential(*layers)
 
         def forward(self, x):
-                #print (x)      
-                c = x.detach().numpy()
-                dis = torch.from_numpy(euclidean_distances(c, c))
+                #print (x)
+                #c = x.detach().numpy()
+                #dis = torch.from_numpy(euclidean_distances(c, c))
+                disMatrix = pairwiseDistances(x)
+
                 x = torch.unsqueeze(x, 1)
                 x = torch.unsqueeze(x, 1)
                 #print (x.size())
@@ -153,14 +177,16 @@ class SpNet(nn.Module):
                 # grouping
 
                 #dis = torch.from_numpy(euclidean_distances(x, x))
-                sortIdx = torch.argsort(dis, dim = 1)
+                sortIdx = torch.argsort(disMatrix, dim = 1)
                 
                 buf = out
                 out = out.expand(x.size()[0], 32, 1, 8)
                 for correIdx, corre in enumerate(buf):
                         for idx in range(7):
                                 #print (corre.size(), buf[sortIdx[correIdx][idx]].size())
-                                corre = torch.cat((corre, buf[sortIdx[correIdx][idx]]), 2)
+                                ''' idx + 1 because dont want x=y '''
+                                corre = torch.cat((corre,\
+                                    buf[sortIdx[correIdx][idx+1]]), 2)
                                 #print (buf[sortIdx[correIdx][idx]])
                                 #print (corre.size())
                         out[correIdx] = corre
@@ -256,8 +282,8 @@ class MyNet(nn.Module):
 
                 super(MyNet, self).__init__()
 
-                self.firstP = fullyConnected(5, 128)
-                self.fc1 = fullyConnected(5, 16)
+                self.firstP = fullyConnected(6, 128)
+                self.fc1 = fullyConnected(6, 16)
                 self.fc2 = fullyConnected(16, 64)
                 self.fc3 = fullyConnected(64, 128)
                 

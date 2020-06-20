@@ -10,10 +10,10 @@ import numpy as np
 import lossFunction
 import cv2
 
-from model import MyNet
-from model import SpNet
-from model import NGNet
-from dataLoader import localizerLoader
+from fusionmodel import MyNet
+from fusionmodel import SpNet
+from fusionmodel import NGNet
+from dataLoader128 import localizerLoader
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from math import *
@@ -35,12 +35,13 @@ threshold7 = 0
 #dirPath = 'DataSet/Cambridge/OldHospital/train.txt'
 #testPath = 'DataSet/Cambridge/OldHospital/test.txt'
 #testPath = 'DataSet/Cambridge/ShopFacade/test.txt'
-dirPath = 'DataSet/Cambridge/OldHospital/train_dis.txt'
-testPath = 'DataSet/Cambridge/OldHospital/test_dis.txt'
+dirPath = 'DataSet/Cambridge/OldHospital/128train.txt'
+testPath = 'DataSet/Cambridge/OldHospital/128test.txt'
 
 classLoss = 0
+localLoss = 0
 
-pthName = 'SP_class_Nodistance_NoCN_'
+pthName = 'SP_class_Nodistance_NoCN_128fusion_F_descriptorNormalization'
 
 np.set_printoptions(suppress = True)
 
@@ -84,20 +85,23 @@ def argParse():
         return args
 
 
-def lossFunctionOri(input, target, epoch):
+def lossFunctionOri(input, target, rvec, rvecgt, tvec, tvecgt,  epoch):
 
         global classLoss, localLoss, epochNum
 
         classficationLoss = F.binary_cross_entropy(torch.sigmoid(input),\
-                target)  
+                target)
+        loLoss = lossFunction.localizationLoss()
+        localizationLoss = loLoss(rvec, rvecgt, tvec, tvecgt)
         loss = classficationLoss
         #loss = classficationLoss + localizationLoss
         #loss = localizationLoss
 
-        #loss = (classficationLoss * (epochNum - epoch) + localizationLoss *
-        #epoch * 0.1) / epochNum 
+        #loss = (classficationLoss * epochNum) + ((localizationLoss *
+        #epoch * 0.1) / epochNum)
 
         classLoss += classficationLoss
+        localLoss += localizationLoss
         
         return loss
 
@@ -214,6 +218,7 @@ def train(args, myNet):
                 global localLoss, classLoss
 
                 classLoss = 0
+                localLoss = 0
                 batchNum = 0
 
                 print\
@@ -241,28 +246,40 @@ def train(args, myNet):
 
                         #print (batchIdx, 'th Batch')
                         (corre, label, ransacLabel, focalLength, quaterniongt,
-                                tvecgt, distance) = batch
+                                tvecgt, des1, des2) = batch
                         #tvecgt = np.reshape(tvecgt, (3, 1))
 
                         corre = corre.squeeze()
                         label = label.squeeze()
                         ransacLabel = ransacLabel.squeeze()
-                        distance = distance.squeeze()
+                        #distance = distance.squeeze()
+                        des1 = des1.squeeze()
+                        des2 = des2.squeeze()
                         corre = Variable(corre.float(), requires_grad = True)
                         label = Variable(label.float())
-                        ransacLabel = Variable(ransacLabel.float(),\
-                                requires_grad = False)
-                        distance = Variable(distance.float(), requires_grad = True)
+                        ransacLabel = Variable(ransacLabel.float())
+                        #distance = Variable(distance.float())
+                        for des in des1:
+                            des /= np.linalg.norm(des)
+                        for des in des2:
+                            des /= np.linalg.norm(des)
+                        des1 = Variable(des1.float(), requires_grad = True)
+                        des2 = Variable(des2.float(), requires_grad = True)
                         quaterniongt = Variable(quaterniongt.float(),\
                                 requires_grad = False)
                         tvecgt = Variable(tvecgt.float(), requires_grad = False)
-                        distance = torch.unsqueeze(distance, 1)
+                        #distance = torch.unsqueeze(distance, 1)
+                        #des1 = torch.unsqueeze(des1, 1)
+                        #des2 = torch.unsqueeze(des2, 1)
 
                         # distance here
                         #corre = torch.cat((corre, distance), 1)
 
+                        #corre = torch.cat((corre, des1), 1)
+                        #corre = torch.cat((corre, des2), 1)
+
                         if args.train and args.sp:
-                                outLabel, weight = myNet(corre)
+                                outLabel, weight = myNet(corre, des1, des2)
                                 #weight, outLabel = myNet(corre)
                         elif args.train:
                                 outLabel = myNet(corre)
@@ -271,11 +288,36 @@ def train(args, myNet):
                         corre = corre[correMask]
                         corre = corre.data.numpy()
                         corre = np.expand_dims(corre, axis = 2)
-                        #print (corre[:,2:,:].shape, corre[:,:2,:].shape)
-                        #print (corre.shape)
-                 
-                        loss = lossFunctionOri(outLabel, label, epoch + 1)
+
+                        intrinsicMatrix = np.array([[focalLength, 0, 0],\
+                                                    [0, -focalLength, 0],\
+                                                    [0, 0, 1]])
                         
+                        objPts = np.ascontiguousarray(corre[:, 2:5,:])
+                        imgPts = np.ascontiguousarray(corre[:, :2, :])
+                        distCoeffs = np.zeros((5, 1))
+                        if len(corre) < 4:
+                            continue
+
+                        ret, rvec, tvec = cv2.solvePnP(objPts, imgPts,\
+                                intrinsicMatrix, distCoeffs)
+                        #rotationMatrix = vector2Matrix(rvec)
+                        #quaternion =\
+                        #Variable(torch.from_numpy(matrix2Quaternion(rotationMatrix)).float(),\
+                        #        requires_grad = True)
+                        rotationMatrixgt = quaternion2Matrix(quaterniongt[0])
+                        rvecgt = matrix2Vector(rotationMatrixgt)
+                        rvecgt = Variable(torch.from_numpy(rvecgt).float())
+                        rvec = (rvec.transpose()) * 180 / pi
+                        rvec[0, 1] *= -1
+                        rvec = Variable(torch.from_numpy(rvec).float(),\
+                                requires_grad = True)
+                        tvec = Variable(torch.from_numpy(tvec).float(),\
+                                requires_grad = True)
+                        tvec = torch.reshape(tvec, (1, 3))
+                        loss = lossFunctionOri(outLabel, label, rvec, rvecgt,
+                                tvec, tvecgt, epoch + 1)
+                        #quaternion = torch.reshape(quaternion, (1, 4))
                         optimizer.zero_grad()
                         loss.backward()
                         optimizer.step()
@@ -301,6 +343,9 @@ def train(args, myNet):
 
                                 baselineCorrect += 1 if baseline == gt else 0
                                 inlier += 1 if result > threshold7 else 0
+                                   
+                                #print ('training, ', result)
+
                         batchNum += 1
 
                         total += len(label)
@@ -315,8 +360,8 @@ def train(args, myNet):
                 acc6 = correct6 / total
                 acc7 = correct7 / total
                 baselineAcc = baselineCorrect / total
-                inlierP = inlier / total
-
+                inlierPer = inlier / total
+                
                 print ('\nbaseline: ', baselineAcc, '\n')
                 print ('acc' , threshold1 , ': ', acc1, '\n')
                 print ('acc' , threshold2 , ': ', acc2, '\n')
@@ -325,13 +370,12 @@ def train(args, myNet):
                 print ('acc' , threshold5 , ': ', acc5, '\n')
                 print ('acc' , threshold6 , ': ', acc6, '\n')
                 print ('acc' , threshold7 , ': ', acc7, '\n')
-                print ('inlier: ', inlierP)
+                print ('inlierP: ', inlierPer)
                 #print ('loss: ', loss, '\n')
                 #print ('baseline: ', baselineAcc, '\n', file = resultFile)
                 #print ('acc: ', acc, '\n\n', file = resultFile)
 
-                testAcc1, testAcc2, testAcc3, testAcc4, testAcc5, testAcc6,\
-                testAcc7, baseAcc, inlierP = test(args, myNet)
+                testAcc1, testAcc2, testAcc3, testAcc4, testAcc5, testAcc6, testAcc7, baseAcc, inlierPer = test(args, myNet)
 
                 print ('testBaseAcc: ', baseAcc)
                 print ('testAcc1: ', testAcc1)
@@ -341,8 +385,7 @@ def train(args, myNet):
                 print ('testAcc5: ', testAcc5)
                 print ('testAcc6: ', testAcc6)
                 print ('testAcc7: ', testAcc7)
-                print ('inlier:', inlierP)
-
+                print ('inlierPer: ', inlierPer)
                 torch.save(myNet.state_dict(), './pth/' + pthName +\
                         str(epochIdx) + 'epoch.pth')
                 
@@ -370,28 +413,79 @@ def test(args, myNet):
 
         for batchIdx, batch in enumerate(dataLoader):
 
-                (corre, label, ransacLabel, focalLength, quaternion, tvec,\
-                        distance) = batch
+                (corre, label, ransacLabel, focalLength, quaterniongt, tvecgt,\
+                        des1, des2) = batch
                 corre = corre.squeeze()
                 label = label.squeeze()
                 ransacLabel = ransacLabel.squeeze()
-                distance = distance.squeeze()
+                #distance = distance.squeeze()
+                for des in des1:
+                    des /= np.linalg.norm(des)
+                for des in des2:
+                    des /= np.linalg.norm(des)
+                des1 = des1.squeeze()
+                des2 = des2.squeeze()
                 corre = Variable(corre.float(), requires_grad = False)
                 label = Variable(label.float(), requires_grad = False)
                 ransacLabel = Variable(ransacLabel.float(), requires_grad = False)
-                distance = Variable(distance.float(), requires_grad = False)
+                #distance = Variable(distance.float())
+                des1 = Variable(des1.float(), requires_grad = False)
+                des2 = Variable(des2.float(), requires_grad = False)
 
-                distance = torch.unsqueeze(distance, 1)
+            #distance = torch.unsqueeze(distance, 1)
+                #des1 = torch.unsqueeze(des1, 1)
+                #des2 = torch.unsqueeze(des2, 1)
                 
                 # distance here
                 #corre = torch.cat((corre, distance), 1)
 
+                #corre = torch.cat((corre, des1), 1)
+                #corre = torch.cat((corre, des2), 1)
+
                 if args.train and args.sp:
-                        outLabel, weight = myNet(corre)
+                        outLabel, weight = myNet(corre, des1, des2)
                         #weight, outLabel = myNet(corre)
                 elif args.train:
                         outLabel = myNet(corre)
                         outLabel = outLabel.squeeze()
+                outLabel = outLabel.squeeze()
+                correMask = (outLabel > threshold7)
+                corre = corre[correMask]
+                corre = corre.data.numpy()
+                corre = np.expand_dims(corre, axis = 2)
+
+                intrinsicMatrix = np.array([[focalLength, 0, 0],\
+                                                    [0, -focalLength, 0],\
+                                                    [0, 0, 1]])
+                        
+                objPts = np.ascontiguousarray(corre[:, 2:5,:])
+                imgPts = np.ascontiguousarray(corre[:, :2, :])
+                distCoeffs = np.zeros((5, 1))
+                if len(corre) < 4:
+                    continue
+
+                ret, rvec, tvec = cv2.solvePnP(objPts, imgPts,\
+                intrinsicMatrix, distCoeffs)
+                rotationMatrix = vector2Matrix(rvec)
+                quaternion =\
+                Variable(torch.from_numpy(matrix2Quaternion(rotationMatrix)).float(),\
+                        requires_grad = True)
+                rotationMatrixgt = quaternion2Matrix(quaterniongt[0])
+                rvecgt = matrix2Vector(rotationMatrixgt)
+                rvecgt = Variable(torch.from_numpy(rvecgt).float())
+                rvec = (rvec.transpose()) * 180 / pi
+                rvec[0, 1] *= -1
+                rvec = Variable(torch.from_numpy(rvec).float(),\
+                        requires_grad = True)
+                tvec = Variable(torch.from_numpy(tvec).float(),\
+                        requires_grad = True)
+                tvec = torch.reshape(tvec, (1, 3))
+
+                rvec = torch.div(rvec, (torch.sqrt(torch.sum(rvec**2))))   
+                rvecgt = torch.div(rvec, (torch.sqrt(torch.sum(rvecgt**2))))   
+                tvec = torch.div(rvec, (torch.sqrt(torch.sum(tvec**2))))   
+                tvecgt = torch.div(rvec, (torch.sqrt(torch.sum(tvecgt**2))))   
+
                 '''
                 for result, baseline, gt in zip(outLabel, ransacLabel, label):  
                         #correct += 1 if result > threshold7 and gt == 1 else 0
@@ -423,6 +517,8 @@ def test(args, myNet):
                     correct7 += 1 if result < threshold7 and gt == 0 else 0
                     baselineCorrect += 1 if baseline == gt else 0 
                     inlier += 1 if result > threshold7 else 0
+                
+                #print ('testing, ', result)
 
                 total += len(label)
         acc1 = correct1 / total
@@ -434,9 +530,9 @@ def test(args, myNet):
         acc7 = correct7 / total
         #acc = correct / total
         baselineAcc = baselineCorrect / total
-        inlierP = inlier / total
+        inlierPer = inlier / total
 
-        return acc1, acc2, acc3, acc4, acc5, acc6, acc7, baselineAcc, inlierP
+        return acc1, acc2, acc3, acc4, acc5, acc6, acc7, baselineAcc, inlierPer
 
 if __name__ == '__main__':
         main()
